@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Load & Circuit Breaker Calculator</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #3b82f6;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #334155;
+            --border: #e2e8f0;
+            --accent: #e11d48;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-top: 0;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        button {
+            background-color: var(--primary-light);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary);
+        }
+
+        .appliance-list {
+            margin-top: 20px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .appliance-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .appliance-item:last-child {
+            border-bottom: none;
+        }
+
+        .remove-btn {
+            background: none;
+            color: var(--accent);
+            border: none;
+            cursor: pointer;
+            width: auto;
+            padding: 5px;
+        }
+
+        .results-box {
+            background-color: #eff6ff;
+            border-left: 5px solid var(--primary-light);
+            padding: 20px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        .result-row.total {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--primary);
+            border-top: 2px dashed var(--border);
+            padding-top: 12px;
+            margin-top: 15px;
+        }
+
+        .badge {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Home Circuit Breaker Calculator (230V Single-Phase)</h1>
+    
+    <div class="grid">
+        <!-- Input Section -->
+        <div>
+            <h3>Add Appliances</h3>
+            <div class="form-group">
+                <label for="preset">Quick Select Appliance:</label>
+                <select id="preset" onchange="window.applyPreset()">
+                    <option value="custom">Custom Entry...</option>
+                    <option value="lights">LED Lighting Circuit (150W)</option>
+                    <option value="fridge">Refrigerator (300W)</option>
+                    <option value="microwave">Microwave (1200W)</option>
+                    <option value="aircon" selected>2 HP Aircon (1600W - Continuous)</option>
+                    <option value="kettle">Electric Kettle (2000W)</option>
+                    <option value="heater">Shower Water Heater (3500W - Heavy)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="name">Appliance Name:</label>
+                <input type="text" id="name" value="2 HP Aircon">
+            </div>
+            
+            <div class="form-group">
+                <label for="watts">Power (Watts):</label>
+                <input type="number" id="watts" value="1600">
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="isContinuous" checked style="width: auto; margin-right: 8px;">
+                    Continuous/Heavy Load? (Applies 125% safety sizing multiplier)
+                </label>
+            </div>
+            
+            <button type="button" onclick="if (typeof window.addAppliance === 'function') window.addAppliance(); else alert('Calculator script did not load. Reopen this file with JavaScript enabled.');">Add to Circuit Plan</button>
+            
+            <div class="appliance-list" id="applianceList">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+        
+        <!-- Output Section -->
+        <div>
+            <h3>Load Computation Results</h3>
+            <div class="results-box">
+                <div class="result-row">
+                    <span>Total Connected Load:</span>
+                    <span id="totalWatts">0 W</span>
+                </div>
+                <div class="result-row">
+                    <span>Base Current Draw:</span>
+                    <span id="baseAmps">0.00 A</span>
+                </div>
+                <div class="result-row">
+                    <span>Latest Appliance Current:</span>
+                    <span id="latestAmps">--</span>
+                </div>
+                <div class="result-row">
+                    <span>Estimated Demand Current:</span>
+                    <span id="demandAmps" title="Includes continuous load scale factors">0.00 A</span>
+                </div>
+                <div class="result-row total">
+                    <span>Illustrative Breaker Rating:</span>
+                    <span id="mcbRating">--</span>
+                </div>
+                <div class="result-row" style="margin-top: 15px; font-size: 14px; color: #475569;">
+                    <span>Wire size:</span>
+                    <span id="wireSize" style="font-weight: 600;">--</span>
+                </div>
+            </div>
+            
+            <p style="font-size: 12px; color: #64748b; margin-top: 20px; line-height: 1.4;">
+                * Calculation: total connected load = sum of appliance watts. Appliance current = watts / 230V; base current = sum of appliance currents. Estimated demand current = sum of each appliance current, multiplied by 1.25 when marked continuous. The breaker estimate is the next listed rating at or above the demand current. Wire size is not calculated because it depends on local code and installation details. Estimates only; have a qualified electrician verify the design before installation.
+            </p>
+        </div>
+    </div>
+</div>
+
+<noscript>
+    <p>JavaScript must be enabled in your browser to calculate loads and add appliances.</p>
+</noscript>
+
+<script type="text/javascript">
+    var VOLTAGE = 230;
+    var appliances = [];
+    var nextApplianceId = 1;
+
+    var presets = {
+        custom: { name: "", watts: "", continuous: false },
+        lights: { name: "LED Lighting Circuit", watts: 150, continuous: false },
+        fridge: { name: "Refrigerator", watts: 300, continuous: false },
+        microwave: { name: "Microwave", watts: 1200, continuous: false },
+        aircon: { name: "2 HP Aircon", watts: 1600, continuous: true },
+        kettle: { name: "Electric Kettle", watts: 2000, continuous: false },
+        heater: { name: "Shower Water Heater", watts: 3500, continuous: true }
+    };
+
+    window.applyPreset = function () {
+        var preset = presets[document.getElementById('preset').value];
+        if (!preset) return;
+        document.getElementById('name').value = preset.name;
+        document.getElementById('watts').value = preset.watts;
+        document.getElementById('isContinuous').checked = preset.continuous;
+    };
+
+    window.addAppliance = function () {
+        var name = document.getElementById('name').value.replace(/^\s+|\s+$/g, '');
+        var watts = parseFloat(document.getElementById('watts').value);
+        var isContinuous = document.getElementById('isContinuous').checked;
+
+        if (!name || !isFinite(watts) || watts <= 0) {
+            alert("Please enter a valid name and wattage rating.");
+            return;
+        }
+
+        appliances.push({ id: nextApplianceId++, name: name, watts: watts, isContinuous: isContinuous });
+        updateUI();
+    };
+
+    window.removeAppliance = function (id) {
+        var remaining = [];
+        var i;
+        for (i = 0; i < appliances.length; i++) {
+            if (appliances[i].id !== id) remaining.push(appliances[i]);
+        }
+        appliances = remaining;
+        updateUI();
+    };
+
+    function updateUI() {
+        var listContainer = document.getElementById('applianceList');
+        var totalWatts = 0;
+        var baseAmpsTotal = 0;
+        var demandAmpsTotal = 0;
+        var i;
+
+        while (listContainer.firstChild) {
+            listContainer.removeChild(listContainer.firstChild);
+        }
+
+        for (i = 0; i < appliances.length; i++) {
+            var app = appliances[i];
+            var itemAmps = app.watts / VOLTAGE;
+            var computedAmps = app.isContinuous ? itemAmps * 1.25 : itemAmps;
+            var item = document.createElement('div');
+            var details = document.createElement('div');
+            var applianceName = document.createElement('strong');
+            var badge = document.createElement('span');
+            var reading = document.createElement('small');
+            var removeButton = document.createElement('button');
+
+            totalWatts += app.watts;
+            baseAmpsTotal += itemAmps;
+            demandAmpsTotal += computedAmps;
+
+            item.className = 'appliance-item';
+            applianceName.textContent = app.name;
+            badge.className = 'badge';
+            badge.textContent = app.isContinuous ? 'Continuous' : 'Non-Cont.';
+            reading.textContent = app.watts + 'W (~' + itemAmps.toFixed(2) + 'A)';
+            details.appendChild(applianceName);
+            details.appendChild(document.createTextNode(' '));
+            details.appendChild(badge);
+            details.appendChild(document.createElement('br'));
+            details.appendChild(reading);
+
+            removeButton.type = 'button';
+            removeButton.className = 'remove-btn';
+            removeButton.textContent = 'Remove';
+            removeButton.setAttribute('aria-label', 'Remove ' + app.name);
+            removeButton.onclick = (function (applianceId) {
+                return function () {
+                    window.removeAppliance(applianceId);
+                };
+            }(app.id));
+
+            item.appendChild(details);
+            item.appendChild(removeButton);
+            listContainer.appendChild(item);
+        }
+
+        var latestAppliance = appliances.length ? appliances[appliances.length - 1] : null;
+        var latestAmps = latestAppliance
+            ? (latestAppliance.watts / VOLTAGE).toFixed(2) + ' A'
+            : '--';
+        var breakerRatings = [20, 30, 40, 50, 60, 100];
+        var breakerRating = null;
+
+        for (i = 0; i < breakerRatings.length; i++) {
+            if (breakerRatings[i] >= demandAmpsTotal) {
+                breakerRating = breakerRatings[i];
+                break;
+            }
+        }
+
+        var estimatedBreaker = demandAmpsTotal === 0
+            ? '--'
+            : breakerRating
+                ? breakerRating + ' A (estimate)'
+                : 'Above 100 A; electrician review';
+        var wireGuidance = demandAmpsTotal === 0
+            ? '--'
+            : 'Requires local code and installation review';
+
+        document.getElementById('totalWatts').innerText = totalWatts.toLocaleString() + ' W';
+        document.getElementById('baseAmps').innerText = baseAmpsTotal.toFixed(2) + ' A';
+        document.getElementById('latestAmps').innerText = latestAmps;
+        document.getElementById('demandAmps').innerText = demandAmpsTotal.toFixed(2) + ' A';
+        document.getElementById('mcbRating').innerText = estimatedBreaker;
+        document.getElementById('wireSize').innerText = wireGuidance;
+    }
+
+    window.applyPreset();
+    updateUI();
+</script>
+</body>
+</html>
